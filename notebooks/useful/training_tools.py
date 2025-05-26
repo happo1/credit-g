@@ -1,10 +1,9 @@
 from sklearn.model_selection import StratifiedKFold, GridSearchCV
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, make_scorer
 from imblearn.pipeline import Pipeline
 from imblearn.over_sampling import SMOTE
-from sklearn.metrics import confusion_matrix
 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -22,7 +21,7 @@ warnings.filterwarnings('ignore')
 pd.set_option('display.max_colwidth', None)
 
 class ModelTraining:
-    def __init__(self, model_name, model, param_grid, preprocessor, X, y, trainval_splits=TRAINVAL_SPLITS, seed=SEED, pos_label=None):
+    def __init__(self, model_name, model, param_grid, preprocessor, X, y, trainval_splits=TRAINVAL_SPLITS, seed=SEED, pos_label=None, resampler=None):
         self.model_name = model_name
         self.model = model
         self.param_grid = param_grid
@@ -31,13 +30,18 @@ class ModelTraining:
         self.y = y
         self.cv = StratifiedKFold(n_splits=trainval_splits, shuffle=True, random_state=seed)
         self.pos_label = pos_label
+        self.resampler = resampler
         
-        smote = SMOTE(random_state=seed, sampling_strategy='minority', k_neighbors=3)
-        self.pipeline = Pipeline(steps=[
-            ('preprocessor', self.preprocessor),
-            ('oversampling', smote),
-            ('classifier', self.model)
-        ])
+        steps = [
+            ('preprocessor', self.preprocessor)
+        ]
+        
+        if resampler:
+            steps.append(('oversampling', self.resampler))
+            
+        steps.append(('classifier', self.model))
+        
+        self.pipeline = Pipeline(steps)
 
         self.results = []
         self.mean_scores = None
@@ -45,7 +49,7 @@ class ModelTraining:
         self.best_score = -1
 
     def _set_train_test(self, X_train, X_test, y_train, y_test):
-        # Converte para string para evitar problemas com floats (ex: 0.5)
+        # Converte para float
         self.X_train = X_train
         self.X_test = X_test
         self.y_train = y_train
